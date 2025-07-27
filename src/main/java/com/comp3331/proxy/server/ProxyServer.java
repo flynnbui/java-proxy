@@ -226,8 +226,8 @@ public class ProxyServer {
                 HTTPStreamReader originReader = new HTTPStreamReader(originSocket, config.getTimeout());
                 HTTPResponse response = originReader.readHttpResponse(request.getMethod());
                 
-                // Transform response for client
-                return transformer.transformResponseForClient(response);
+                // Transform response for client with connection preference
+                return transformer.transformResponseForClient(response, request);
                 
             } finally {
                 closeSocketSafely(originSocket);

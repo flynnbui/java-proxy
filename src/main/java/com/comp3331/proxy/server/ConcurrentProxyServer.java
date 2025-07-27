@@ -160,8 +160,11 @@ public class ConcurrentProxyServer extends ProxyServer {
                     break;
                 } catch (IOException e) {
                     // Connection closed by client
-                    if (!e.getMessage().contains("Connection reset")) {
-                        System.err.println("[Thread " + Thread.currentThread().getId() + "] IO error: " + e.getMessage());
+                    String msg = e.getMessage();
+                    if (msg != null && !msg.contains("Connection reset") && 
+                        !msg.contains("Socket closed") && 
+                        !msg.contains("connection was aborted")) {
+                        System.err.println("[Thread " + Thread.currentThread().getId() + "] IO error: " + msg);
                     }
                     break;
                 }
@@ -243,8 +246,8 @@ public class ConcurrentProxyServer extends ProxyServer {
                 cache.put(cacheKey, response, request);
             }
             
-            // Transform response for client
-            return transformer.transformResponseForClient(response);
+            // Transform response for client with connection preference
+            return transformer.transformResponseForClient(response, request);
             
         } finally {
             closeSocketSafely(originSocket);

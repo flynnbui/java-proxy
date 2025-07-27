@@ -36,7 +36,7 @@ public class MessageTransformer {
             }
         }
         
-        // Set Connection: close
+        // For origin server, always use Connection: close to simplify proxy logic
         headers.put("Connection", "close");
         
         // Add/append Via header
@@ -64,16 +64,42 @@ public class MessageTransformer {
      * Transform origin server response for forwarding to client.
      */
     public byte[] transformResponseForClient(HTTPResponse response) {
+        return transformResponseForClient(response, null);
+    }
+    
+    /**
+     * Transform origin server response for forwarding to client with connection preference.
+     */
+    public byte[] transformResponseForClient(HTTPResponse response, HTTPRequest clientRequest) {
         // Build headers for forwarding
         Map<String, String> headers = new LinkedHashMap<>();
         
-        // Copy all headers
+        // Copy all headers except Connection (we'll set it based on client preference)
         for (Map.Entry<String, String> entry : response.getRawHeaders().entrySet()) {
-            headers.put(entry.getKey(), entry.getValue());
+            if (!"connection".equalsIgnoreCase(entry.getKey())) {
+                headers.put(entry.getKey(), entry.getValue());
+            }
         }
         
-        // Set Connection: close
-        headers.put("Connection", "close");
+        // Set Connection header based on client request
+        if (clientRequest != null) {
+            String clientConnection = clientRequest.getHeader("Connection");
+            if ("keep-alive".equalsIgnoreCase(clientConnection)) {
+                headers.put("Connection", "keep-alive");
+            } else if ("close".equalsIgnoreCase(clientConnection)) {
+                headers.put("Connection", "close");
+            } else {
+                // HTTP/1.1 defaults to keep-alive, HTTP/1.0 defaults to close
+                if ("HTTP/1.1".equals(clientRequest.getVersion())) {
+                    headers.put("Connection", "keep-alive");
+                } else {
+                    headers.put("Connection", "close");
+                }
+            }
+        } else {
+            // No client request info, default to close
+            headers.put("Connection", "close");
+        }
         
         // Add/append Via header
         String viaValue = proxyId;
