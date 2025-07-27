@@ -1,0 +1,137 @@
+// Example of how to refactor ConcurrentProxyServer to use ErrorHandlingMiddleware
+// This is a partial example showing the key changes
+
+package com.comp3331.proxy.server;
+
+import com.comp3331.proxy.middleware.ErrorHandlingMiddleware;
+// ... other imports
+
+public class ConcurrentProxyServerRefactored extends ProxyServer {
+    private ErrorHandlingMiddleware errorHandler;
+    
+    public ConcurrentProxyServerRefactored(ProxyConfig config, int maxWorkers) {
+        super(config);
+        // ... other initialization
+        this.errorHandler = new ErrorHandlingMiddleware(logger);
+    }
+    
+    /**
+     * Simplified handleClientPersistent using middleware
+     */
+    protected void handleClientPersistent(Socket clientSocket, String clientIp, int clientPort) {
+        try {
+            clientSocket.setSoTimeout(config.getTimeout() * 1000);
+            HTTPStreamReader reader = new HTTPStreamReader(clientSocket, config.getTimeout());
+            OutputStream clientOutput = clientSocket.getOutputStream();
+            
+            while (!clientSocket.isClosed() && running) {
+                try {
+                    HTTPRequest request = reader.readHttpRequest();
+                    String requestLine = request.getMethod() + " " + request.getTarget() + " " + request.getVersion();
+                    
+                    System.out.println("Request: " + requestLine);
+                    
+                    // Process request with simplified error handling
+                    byte[] responseData = processRequestWithMiddleware(request, clientSocket);
+                    
+                    // Send response
+                    if (responseData != null) {
+                        clientOutput.write(responseData);
+                        clientOutput.flush();
+                    }
+                    
+                    // Log transaction
+                    int statusCode = errorHandler.getStatusCode(null); // or extract from response
+                    int responseBytes = extractResponseBodySize(responseData);
+                    String cacheStatus = getCacheStatus(request);
+                    logger.logTransaction(clientIp, clientPort, cacheStatus, requestLine, statusCode, responseBytes);
+                    
+                    // Check if connection should be closed
+                    if (shouldCloseConnection(request, responseData)) {
+                        break;
+                    }
+                    
+                } catch (HTTPParseException e) {
+                    // Let middleware handle the error
+                    byte[] errorResponse = errorHandler.handleError(e, "Request parsing");
+                    clientOutput.write(errorResponse);
+                    break;
+                } catch (SocketTimeoutException e) {
+                    // Normal timeout for persistent connections
+                    break;
+                } catch (IOException e) {
+                    // Connection closed by client
+                    if (!isExpectedConnectionClose(e)) {
+                        errorHandler.handleError(e, "Client connection");
+                    }
+                    break;
+                }
+            }
+        } catch (IOException e) {
+            errorHandler.handleError(e, "Persistent connection setup");
+        }
+    }
+    
+    /**
+     * Simplified processRequest using middleware
+     */
+    private byte[] processRequestWithMiddleware(HTTPRequest request, Socket clientSocket) {
+        try {
+            // Business logic remains the same
+            if ("GET".equals(request.getMethod())) {
+                return handleGetWithCache(request);
+            } else if ("HEAD".equals(request.getMethod()) || "POST".equals(request.getMethod())) {
+                return handleHttpMethod(request, "", 0);
+            } else if ("CONNECT".equals(request.getMethod())) {
+                return handleConnectMethod(request, clientSocket);
+            } else {
+                return ErrorResponseGenerator.badRequest("Method not supported: " + request.getMethod());
+            }
+        } catch (Exception e) {
+            // All errors handled by middleware
+            return errorHandler.handleError(e, "Processing " + request.getMethod() + " request");
+        }
+    }
+    
+    /**
+     * Example of using retry logic with middleware
+     */
+    private byte[] handleGetWithCacheAndRetry(HTTPRequest request) throws ProxyException, IOException, HTTPParseException {
+        int maxRetries = 2;
+        Exception lastError = null;
+        
+        for (int attempt = 0; attempt <= maxRetries; attempt++) {
+            try {
+                return handleGetWithCache(request);
+            } catch (Exception e) {
+                lastError = e;
+                
+                // Check if error is retriable
+                if (attempt < maxRetries && errorHandler.isRetriableError(e)) {
+                    logger.logWarning("Retrying request after error: " + e.getMessage());
+                    // Exponential backoff
+                    try {
+                        Thread.sleep((long) Math.pow(2, attempt) * 100);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                } else {
+                    break;
+                }
+            }
+        }
+        
+        // All retries failed
+        throw new ProxyException("Request failed after " + maxRetries + " retries", lastError);
+    }
+    
+    private boolean isExpectedConnectionClose(IOException e) {
+        String msg = e.getMessage();
+        return msg != null && (
+            msg.contains("Connection reset") || 
+            msg.contains("Socket closed") || 
+            msg.contains("connection was aborted")
+        );
+    }
+}

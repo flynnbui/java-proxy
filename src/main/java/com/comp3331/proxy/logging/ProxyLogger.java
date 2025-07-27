@@ -63,4 +63,29 @@ public class ProxyLogger {
         String cacheStatus = cacheHit ? "H" : "M";
         logTransaction(clientIp, clientPort, cacheStatus, requestLine, statusCode, responseBytes);
     }
+    
+    /**
+     * Log warning message.
+     */
+    public void logWarning(String message) {
+        synchronized (lock) {
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("[dd/MMM/yyyy:HH:mm:ss Z]", Locale.ENGLISH);
+            String timestamp = ZonedDateTime.now().format(formatter);
+            System.err.println("[WARN] " + timestamp + " " + message);
+        }
+    }
+    
+    /**
+     * Log error message with optional exception.
+     */
+    public void logError(String message, Throwable error) {
+        synchronized (lock) {
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("[dd/MMM/yyyy:HH:mm:ss Z]", Locale.ENGLISH);
+            String timestamp = ZonedDateTime.now().format(formatter);
+            System.err.println("[ERROR] " + timestamp + " " + message);
+            if (error != null) {
+                error.printStackTrace(System.err);
+            }
+        }
+    }
 }

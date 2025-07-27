@@ -148,19 +148,10 @@ public class ProxyServer {
                 System.err.println("Failed to send error response: " + ioE.getMessage());
             }
         } catch (ProxyException e) {
-            // Proxy specific errors
+            // Proxy specific errors - use ErrorHandler
             try {
-                byte[] errorResponse;
-                if (e.getMessage().contains("timed out")) {
-                    errorResponse = ErrorResponseGenerator.gatewayTimeout("Origin server timeout");
-                    statusCode = 504;
-                } else if (e.getMessage().contains("could not resolve")) {
-                    errorResponse = ErrorResponseGenerator.badGateway("Failed to resolve host");
-                    statusCode = 502;
-                } else {
-                    errorResponse = ErrorResponseGenerator.badGateway("Proxy error: " + e.getMessage());
-                    statusCode = 502;
-                }
+                byte[] errorResponse = ErrorHandler.mapExceptionToResponse(e);
+                statusCode = ErrorHandler.getStatusCode(e);
                 clientSocket.getOutputStream().write(errorResponse);
                 responseBytes = errorResponse.length;
             } catch (IOException ioE) {

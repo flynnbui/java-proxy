@@ -140,42 +140,17 @@ public class ConcurrentProxyServer extends ProxyServer {
                     } catch (TimeoutException e) {
                         future.cancel(true);
                         responseData = ErrorResponseGenerator.gatewayTimeout("Request processing timeout");
-                    } catch (ExecutionException e) {
-                        Throwable cause = e.getCause();
-                        System.err.println("[DEBUG] ExecutionException caught, cause: " + cause);
-                        cause.printStackTrace();
-                        if (cause instanceof RuntimeException && cause.getCause() != null) {
-                            Throwable actualCause = cause.getCause();
-                            System.err.println("[DEBUG] Actual cause: " + actualCause);
-                            actualCause.printStackTrace();
-                            if (actualCause instanceof ProxyException) {
-                                ProxyException pe = (ProxyException) actualCause;
-                                if (pe.getMessage().contains("could not resolve")) {
-                                    responseData = ErrorResponseGenerator.badGateway("Failed to resolve host");
-                                } else if (pe.getMessage().contains("timed out")) {
-                                    responseData = ErrorResponseGenerator.gatewayTimeout("Connection timeout");
-                                } else {
-                                    responseData = ErrorResponseGenerator.badGateway(pe.getMessage());
-                                }
-                            } else if (actualCause instanceof HTTPParseException) {
-                                responseData = ErrorResponseGenerator.badRequest("Parse error: " + actualCause.getMessage());
-                            } else {
-                                responseData = ErrorResponseGenerator.badGateway("Processing error: " + actualCause.getMessage());
+                        } catch (ExecutionException e) {
+                            Throwable cause = e.getCause();
+                            // Unwrap RuntimeException if necessary
+                            if (cause instanceof RuntimeException && cause.getCause() != null) {
+                                cause = cause.getCause();
                             }
-                        } else if (cause instanceof ProxyException) {
-                            ProxyException pe = (ProxyException) cause;
-                            if (pe.getMessage().contains("could not resolve")) {
-                                responseData = ErrorResponseGenerator.badGateway("Failed to resolve host");
-                            } else if (pe.getMessage().contains("timed out")) {
-                                responseData = ErrorResponseGenerator.gatewayTimeout("Connection timeout");
-                            } else {
-                                responseData = ErrorResponseGenerator.badGateway(pe.getMessage());
-                            }
-                        } else if (cause instanceof HTTPParseException) {
-                            responseData = ErrorResponseGenerator.badRequest("Parse error: " + cause.getMessage());
-                        } else {
-                            responseData = ErrorResponseGenerator.badGateway("Processing error: " + cause.getMessage());
-                        }
+                            // Use ErrorHandler for consistent error mapping
+                            responseData = ErrorHandler.mapExceptionToResponse(cause);
+                            
+                            // Log the error for debugging
+                            logger.logWarning("Request processing error: " + cause.getMessage());
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
                         responseData = ErrorResponseGenerator.badGateway("Request processing interrupted");
@@ -187,12 +162,8 @@ public class ConcurrentProxyServer extends ProxyServer {
                     
                     // Send response
                     if (responseData != null) {
-                        System.out.println("[DEBUG] Sending response, length: " + responseData.length);
-                        System.out.println("[DEBUG] Response preview: " + new String(responseData, 0, Math.min(responseData.length, 200)));
                         clientOutput.write(responseData);
                         clientOutput.flush();
-                    } else {
-                        System.err.println("[DEBUG] Response data is null!");
                     }
                     
                     // Log transaction with cache status
@@ -248,20 +219,9 @@ public class ConcurrentProxyServer extends ProxyServer {
             } else {
                 return ErrorResponseGenerator.badRequest("Method not supported: " + request.getMethod());
             }
-        } catch (ProxyException e) {
-            // Handle proxy exceptions with appropriate error responses
-            String msg = e.getMessage();
-            if (msg.contains("could not resolve") || msg.contains("could not connect")) {
-                return ErrorResponseGenerator.badGateway("Failed to resolve host");
-            } else if (msg.contains("timed out")) {
-                return ErrorResponseGenerator.gatewayTimeout("Connection to origin server timed out");
-            } else if (msg.contains("connection refused")) {
-                return ErrorResponseGenerator.badGateway("Connection refused by origin server");
-            } else if (msg.contains("network unreachable")) {
-                return ErrorResponseGenerator.badGateway("Network unreachable");
-            } else {
-                return ErrorResponseGenerator.badGateway("Proxy error: " + e.getMessage());
-            }
+        } catch (Exception e) {
+            // Use ErrorHandler for consistent error mapping
+            return ErrorHandler.mapExceptionToResponse(e);
         }
     }
     
