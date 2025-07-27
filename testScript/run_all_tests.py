@@ -32,7 +32,7 @@ class ProxyTester:
     def start_proxy(self, port):
         """Start the Java proxy server."""
         process = subprocess.Popen(
-            ["java", "-cp", self.build_dir, "com.comp3331.proxy.HttpProxy", 
+            ["java", "-cp", self.build_dir, "proxy.HttpProxy", 
              str(port), "10", "1048576", "10485760"],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,

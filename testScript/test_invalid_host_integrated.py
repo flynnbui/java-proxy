@@ -15,7 +15,7 @@ def test_invalid_hosts_with_fresh_proxy():
     print("Starting fresh proxy instance...")
     proxy_port = 50700
     proxy = subprocess.Popen(
-        ["java", "-cp", "out", "com.comp3331.proxy.HttpProxy", str(proxy_port), "10", "1024", "1048576"],
+        ["java", "-cp", "out", "proxy.HttpProxy", str(proxy_port), "10", "1024", "1048576"],
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True

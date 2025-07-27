@@ -37,7 +37,7 @@ def test_localhost_get():
     # Start proxy
     build_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "build", "classes")
     proxy = subprocess.Popen(
-        ["java", "-cp", build_dir, "com.comp3331.proxy.HttpProxy", "50300", "10", "1048576", "10485760"],
+        ["java", "-cp", build_dir, "proxy.HttpProxy", "50300", "10", "1048576", "10485760"],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True

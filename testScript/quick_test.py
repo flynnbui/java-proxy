@@ -25,7 +25,7 @@ def test_basic_proxy():
     
     # Start proxy
     proxy_process = subprocess.Popen(
-        ["java", "-cp", build_dir, "com.comp3331.proxy.HttpProxy", str(test_port), "10", "1024", "1048576"],
+        ["java", "-cp", build_dir, "proxy.HttpProxy", str(test_port), "10", "1024", "1048576"],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True

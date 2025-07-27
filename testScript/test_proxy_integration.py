@@ -43,7 +43,7 @@ def test_proxy_methods():
         print("Starting Java proxy server...")
         build_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "build", "classes")
         proxy_process = subprocess.Popen(
-            ["java", "-cp", build_dir, "com.comp3331.proxy.HttpProxy", str(proxy_port), "10", "1024", "1048576"],
+            ["java", "-cp", build_dir, "proxy.HttpProxy", str(proxy_port), "10", "1024", "1048576"],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True

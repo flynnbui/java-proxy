@@ -11,7 +11,7 @@ def start_proxy():
     """Start the proxy and capture output"""
     print("Starting proxy...")
     proxy = subprocess.Popen(
-        ["java", "-cp", "out", "com.comp3331.proxy.HttpProxy", "50600", "10", "1024", "1048576"],
+        ["java", "-cp", "out", "proxy.HttpProxy", "50600", "10", "1024", "1048576"],
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,

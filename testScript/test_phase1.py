@@ -47,7 +47,7 @@ def test_argument_validation():
         try:
             # Run Java proxy with test arguments
             result = subprocess.run(
-                ["java", "-cp", build_dir, "com.comp3331.proxy.HttpProxy"] + args,
+                ["java", "-cp", build_dir, "proxy.HttpProxy"] + args,
                 capture_output=True,
                 text=True,
                 timeout=2
@@ -107,7 +107,7 @@ def test_socket_binding():
     proxy_process = None
     try:
         proxy_process = subprocess.Popen(
-            ["java", "-cp", build_dir, "com.comp3331.proxy.HttpProxy", str(test_port), "5", "1024", "1048576"],
+            ["java", "-cp", build_dir, "proxy.HttpProxy", str(test_port), "5", "1024", "1048576"],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True
