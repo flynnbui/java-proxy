@@ -13,6 +13,9 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.ExecutionException;
 
 /**
  * Concurrent HTTP proxy server with threading support and caching.
@@ -119,20 +122,77 @@ public class ConcurrentProxyServer extends ProxyServer {
                     
                     System.out.println("Request: " + requestLine);
                     
-                    // Process request
-                    byte[] responseData;
+                    // Process request with timeout
+                    byte[] responseData = null;
+                    // Use a future to enforce timeout on the entire request processing
+                    ExecutorService executor = Executors.newSingleThreadExecutor();
+                    Future<byte[]> future = executor.submit(() -> {
+                        try {
+                            return processRequest(request, clientSocket);
+                        } catch (Exception e) {
+                            throw new RuntimeException(e);
+                        }
+                    });
+                    
                     try {
-                        responseData = processRequest(request, clientSocket);
-                    } catch (ProxyException | HTTPParseException e) {
-                        responseData = ErrorResponseGenerator.badGateway("Request processing failed: " + e.getMessage());
+                        // Timeout should be slightly less than socket timeout to allow error response
+                        responseData = future.get(config.getTimeout() - 1, TimeUnit.SECONDS);
+                    } catch (TimeoutException e) {
+                        future.cancel(true);
+                        responseData = ErrorResponseGenerator.gatewayTimeout("Request processing timeout");
+                    } catch (ExecutionException e) {
+                        Throwable cause = e.getCause();
+                        System.err.println("[DEBUG] ExecutionException caught, cause: " + cause);
+                        cause.printStackTrace();
+                        if (cause instanceof RuntimeException && cause.getCause() != null) {
+                            Throwable actualCause = cause.getCause();
+                            System.err.println("[DEBUG] Actual cause: " + actualCause);
+                            actualCause.printStackTrace();
+                            if (actualCause instanceof ProxyException) {
+                                ProxyException pe = (ProxyException) actualCause;
+                                if (pe.getMessage().contains("could not resolve")) {
+                                    responseData = ErrorResponseGenerator.badGateway("Failed to resolve host");
+                                } else if (pe.getMessage().contains("timed out")) {
+                                    responseData = ErrorResponseGenerator.gatewayTimeout("Connection timeout");
+                                } else {
+                                    responseData = ErrorResponseGenerator.badGateway(pe.getMessage());
+                                }
+                            } else if (actualCause instanceof HTTPParseException) {
+                                responseData = ErrorResponseGenerator.badRequest("Parse error: " + actualCause.getMessage());
+                            } else {
+                                responseData = ErrorResponseGenerator.badGateway("Processing error: " + actualCause.getMessage());
+                            }
+                        } else if (cause instanceof ProxyException) {
+                            ProxyException pe = (ProxyException) cause;
+                            if (pe.getMessage().contains("could not resolve")) {
+                                responseData = ErrorResponseGenerator.badGateway("Failed to resolve host");
+                            } else if (pe.getMessage().contains("timed out")) {
+                                responseData = ErrorResponseGenerator.gatewayTimeout("Connection timeout");
+                            } else {
+                                responseData = ErrorResponseGenerator.badGateway(pe.getMessage());
+                            }
+                        } else if (cause instanceof HTTPParseException) {
+                            responseData = ErrorResponseGenerator.badRequest("Parse error: " + cause.getMessage());
+                        } else {
+                            responseData = ErrorResponseGenerator.badGateway("Processing error: " + cause.getMessage());
+                        }
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        responseData = ErrorResponseGenerator.badGateway("Request processing interrupted");
+                    } finally {
+                        executor.shutdownNow();
                     }
                     int statusCode = extractStatusCode(responseData);
                     int responseBytes = extractResponseBodySize(responseData);
                     
                     // Send response
                     if (responseData != null) {
+                        System.out.println("[DEBUG] Sending response, length: " + responseData.length);
+                        System.out.println("[DEBUG] Response preview: " + new String(responseData, 0, Math.min(responseData.length, 200)));
                         clientOutput.write(responseData);
                         clientOutput.flush();
+                    } else {
+                        System.err.println("[DEBUG] Response data is null!");
                     }
                     
                     // Log transaction with cache status
