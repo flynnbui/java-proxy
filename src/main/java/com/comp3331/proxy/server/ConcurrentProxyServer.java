@@ -154,8 +154,15 @@ public class ConcurrentProxyServer extends ProxyServer {
                         // Ignore
                     }
                     break;
+                } catch (java.net.SocketTimeoutException e) {
+                    // Socket timeout - normal for persistent connections
+                    System.out.println("[Thread " + Thread.currentThread().getId() + "] Connection timeout - closing");
+                    break;
                 } catch (IOException e) {
-                    // Connection closed or timeout
+                    // Connection closed by client
+                    if (!e.getMessage().contains("Connection reset")) {
+                        System.err.println("[Thread " + Thread.currentThread().getId() + "] IO error: " + e.getMessage());
+                    }
                     break;
                 }
             }
@@ -168,14 +175,30 @@ public class ConcurrentProxyServer extends ProxyServer {
      * Process a single request with caching support.
      */
     private byte[] processRequest(HTTPRequest request, Socket clientSocket) throws ProxyException, IOException, HTTPParseException {
-        if ("GET".equals(request.getMethod())) {
-            return handleGetWithCache(request);
-        } else if ("HEAD".equals(request.getMethod()) || "POST".equals(request.getMethod())) {
-            return handleHttpMethod(request, "", 0);
-        } else if ("CONNECT".equals(request.getMethod())) {
-            return handleConnectMethod(request, clientSocket);
-        } else {
-            return ErrorResponseGenerator.badRequest("Method not supported: " + request.getMethod());
+        try {
+            if ("GET".equals(request.getMethod())) {
+                return handleGetWithCache(request);
+            } else if ("HEAD".equals(request.getMethod()) || "POST".equals(request.getMethod())) {
+                return handleHttpMethod(request, "", 0);
+            } else if ("CONNECT".equals(request.getMethod())) {
+                return handleConnectMethod(request, clientSocket);
+            } else {
+                return ErrorResponseGenerator.badRequest("Method not supported: " + request.getMethod());
+            }
+        } catch (ProxyException e) {
+            // Handle proxy exceptions with appropriate error responses
+            String msg = e.getMessage();
+            if (msg.contains("could not resolve") || msg.contains("could not connect")) {
+                return ErrorResponseGenerator.badGateway("Failed to resolve host");
+            } else if (msg.contains("timed out")) {
+                return ErrorResponseGenerator.gatewayTimeout("Connection to origin server timed out");
+            } else if (msg.contains("connection refused")) {
+                return ErrorResponseGenerator.badGateway("Connection refused by origin server");
+            } else if (msg.contains("network unreachable")) {
+                return ErrorResponseGenerator.badGateway("Network unreachable");
+            } else {
+                return ErrorResponseGenerator.badGateway("Proxy error: " + e.getMessage());
+            }
         }
     }
     

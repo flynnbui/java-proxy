@@ -39,18 +39,18 @@ public class OriginConnector {
             return socket;
             
         } catch (UnknownHostException e) {
-            throw new ProxyException("could not resolve");
+            throw new ProxyException("could not resolve host: " + hostname);
         } catch (SocketTimeoutException e) {
-            throw new ProxyException("timed out");
+            throw new ProxyException("connection to " + hostname + " timed out");
         } catch (ConnectException e) {
             if (e.getMessage() != null && e.getMessage().contains("Connection refused")) {
-                throw new ProxyException("connection refused");
+                throw new ProxyException("connection refused by " + hostname);
             } else {
-                throw new ProxyException("could not resolve");
+                throw new ProxyException("could not connect to " + hostname);
             }
         } catch (IOException e) {
             if (e.getMessage() != null && e.getMessage().contains("Network is unreachable")) {
-                throw new ProxyException("could not resolve");
+                throw new ProxyException("network unreachable for host: " + hostname);
             } else {
                 throw new ProxyException("connection error: " + e.getMessage());
             }

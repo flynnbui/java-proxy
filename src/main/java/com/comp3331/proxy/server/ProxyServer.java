@@ -147,6 +147,25 @@ public class ProxyServer {
             } catch (IOException ioE) {
                 System.err.println("Failed to send error response: " + ioE.getMessage());
             }
+        } catch (ProxyException e) {
+            // Proxy specific errors
+            try {
+                byte[] errorResponse;
+                if (e.getMessage().contains("timed out")) {
+                    errorResponse = ErrorResponseGenerator.gatewayTimeout("Origin server timeout");
+                    statusCode = 504;
+                } else if (e.getMessage().contains("could not resolve")) {
+                    errorResponse = ErrorResponseGenerator.badGateway("Failed to resolve host");
+                    statusCode = 502;
+                } else {
+                    errorResponse = ErrorResponseGenerator.badGateway("Proxy error: " + e.getMessage());
+                    statusCode = 502;
+                }
+                clientSocket.getOutputStream().write(errorResponse);
+                responseBytes = errorResponse.length;
+            } catch (IOException ioE) {
+                System.err.println("Failed to send error response: " + ioE.getMessage());
+            }
         } catch (SocketTimeoutException e) {
             // Client timeout
             try {
@@ -159,6 +178,7 @@ public class ProxyServer {
             }
         } catch (Exception e) {
             System.err.println("Error handling client request: " + e.getMessage());
+            e.printStackTrace();
             try {
                 byte[] errorResponse = ErrorResponseGenerator.badGateway("Internal proxy error");
                 clientSocket.getOutputStream().write(errorResponse);
@@ -180,36 +200,41 @@ public class ProxyServer {
      * Handle GET, HEAD, POST methods.
      */
     protected byte[] handleHttpMethod(HTTPRequest request, String clientIp, int clientPort) throws ProxyException, IOException, HTTPParseException {
-        // Parse target URL
-        String[] urlParts = URLParser.parseAbsoluteUrl(request.getTarget());
-        String scheme = urlParts[0];
-        String hostname = urlParts[1];
-        int port = Integer.parseInt(urlParts[2]);
-        String path = urlParts[3];
-        
-        // Check for self-loop
-        if (URLParser.isSelfLoop(hostname, port, config.getPort())) {
-            return ErrorResponseGenerator.misdirectedRequest("Self-loop detected");
-        }
-        
-        // Connect to origin server
-        Socket originSocket = connector.connectToOrigin(hostname, port);
-        
         try {
-            // Transform and send request to origin
-            byte[] transformedRequest = transformer.transformRequestForOrigin(request, hostname, port, path);
-            originSocket.getOutputStream().write(transformedRequest);
-            originSocket.getOutputStream().flush();
+            // Parse target URL
+            String[] urlParts = URLParser.parseAbsoluteUrl(request.getTarget());
+            String scheme = urlParts[0];
+            String hostname = urlParts[1];
+            int port = Integer.parseInt(urlParts[2]);
+            String path = urlParts[3];
             
-            // Read response from origin
-            HTTPStreamReader originReader = new HTTPStreamReader(originSocket, config.getTimeout());
-            HTTPResponse response = originReader.readHttpResponse(request.getMethod());
+            // Check for self-loop
+            if (URLParser.isSelfLoop(hostname, port, config.getPort())) {
+                return ErrorResponseGenerator.misdirectedRequest("Self-loop detected");
+            }
             
-            // Transform response for client
-            return transformer.transformResponseForClient(response);
+            // Connect to origin server
+            Socket originSocket = connector.connectToOrigin(hostname, port);
             
-        } finally {
-            closeSocketSafely(originSocket);
+            try {
+                // Transform and send request to origin
+                byte[] transformedRequest = transformer.transformRequestForOrigin(request, hostname, port, path);
+                originSocket.getOutputStream().write(transformedRequest);
+                originSocket.getOutputStream().flush();
+                
+                // Read response from origin
+                HTTPStreamReader originReader = new HTTPStreamReader(originSocket, config.getTimeout());
+                HTTPResponse response = originReader.readHttpResponse(request.getMethod());
+                
+                // Transform response for client
+                return transformer.transformResponseForClient(response);
+                
+            } finally {
+                closeSocketSafely(originSocket);
+            }
+        } catch (ProxyException e) {
+            // Re-throw to be handled by caller
+            throw e;
         }
     }
     

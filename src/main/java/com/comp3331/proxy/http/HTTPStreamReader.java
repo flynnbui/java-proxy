@@ -70,14 +70,28 @@ public class HTTPStreamReader {
         } else if (response.getStatusCode() == 204 || response.getStatusCode() == 304) {
             // No body for these status codes
         } else if (response.hasTransferEncoding()) {
-            // For simplicity, read until connection close
-            byte[] bodyData = readUntilClose();
-            response.setBody(bodyData);
+            // Handle transfer encoding
+            String transferEncoding = response.getHeader("Transfer-Encoding");
+            if ("chunked".equalsIgnoreCase(transferEncoding)) {
+                // For simplicity, read until connection close
+                byte[] bodyData = readUntilClose();
+                response.setBody(bodyData);
+            } else {
+                // Unknown transfer encoding, assume no body
+                response.setBody(new byte[0]);
+            }
         } else {
             Integer contentLength = response.getContentLength();
             if (contentLength != null && contentLength > 0) {
                 byte[] bodyData = readExactBytes(contentLength);
                 response.setBody(bodyData);
+            } else if (contentLength == null && "close".equalsIgnoreCase(response.getHeader("Connection"))) {
+                // No content length but Connection: close, read until EOF
+                byte[] bodyData = readUntilClose();
+                response.setBody(bodyData);
+            } else {
+                // No content length and no indication of body
+                response.setBody(new byte[0]);
             }
         }
         
@@ -145,13 +159,20 @@ public class HTTPStreamReader {
         ByteArrayOutputStream bodyBuffer = new ByteArrayOutputStream();
         byte[] tempBuffer = new byte[BUFFER_SIZE];
         
+        // Save original timeout and set a shorter one for reading chunks
+        int originalTimeout = socket.getSoTimeout();
         try {
+            socket.setSoTimeout(2000); // 2 second timeout for chunked reads
+            
             int bytesRead;
             while ((bytesRead = inputStream.read(tempBuffer)) != -1) {
                 bodyBuffer.write(tempBuffer, 0, bytesRead);
             }
         } catch (SocketTimeoutException e) {
             // Connection timeout - return what we have
+        } finally {
+            // Restore original timeout
+            socket.setSoTimeout(originalTimeout);
         }
         
         return bodyBuffer.toByteArray();
