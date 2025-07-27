@@ -120,7 +120,12 @@ public class ConcurrentProxyServer extends ProxyServer {
                     System.out.println("Request: " + requestLine);
                     
                     // Process request
-                    byte[] responseData = processRequest(request, clientSocket);
+                    byte[] responseData;
+                    try {
+                        responseData = processRequest(request, clientSocket);
+                    } catch (ProxyException | HTTPParseException e) {
+                        responseData = ErrorResponseGenerator.badGateway("Request processing failed: " + e.getMessage());
+                    }
                     int statusCode = extractStatusCode(responseData);
                     int responseBytes = extractResponseBodySize(responseData);
                     
@@ -162,7 +167,7 @@ public class ConcurrentProxyServer extends ProxyServer {
     /**
      * Process a single request with caching support.
      */
-    private byte[] processRequest(HTTPRequest request, Socket clientSocket) throws ProxyException, IOException {
+    private byte[] processRequest(HTTPRequest request, Socket clientSocket) throws ProxyException, IOException, HTTPParseException {
         if ("GET".equals(request.getMethod())) {
             return handleGetWithCache(request);
         } else if ("HEAD".equals(request.getMethod()) || "POST".equals(request.getMethod())) {
@@ -177,7 +182,7 @@ public class ConcurrentProxyServer extends ProxyServer {
     /**
      * Handle GET request with caching.
      */
-    private byte[] handleGetWithCache(HTTPRequest request) throws ProxyException, IOException {
+    private byte[] handleGetWithCache(HTTPRequest request) throws ProxyException, IOException, HTTPParseException {
         String cacheKey = cache.normalizeUrl(request.getTarget());
         
         // Check cache first

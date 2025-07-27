@@ -179,7 +179,7 @@ public class ProxyServer {
     /**
      * Handle GET, HEAD, POST methods.
      */
-    protected byte[] handleHttpMethod(HTTPRequest request, String clientIp, int clientPort) throws ProxyException, IOException {
+    protected byte[] handleHttpMethod(HTTPRequest request, String clientIp, int clientPort) throws ProxyException, IOException, HTTPParseException {
         // Parse target URL
         String[] urlParts = URLParser.parseAbsoluteUrl(request.getTarget());
         String scheme = urlParts[0];
