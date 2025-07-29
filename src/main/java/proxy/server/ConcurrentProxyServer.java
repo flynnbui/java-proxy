@@ -43,7 +43,7 @@ public class ConcurrentProxyServer extends ProxyServer {
         threadPool = Executors.newFixedThreadPool(maxWorkers);
         running = true;
         
-        System.out.println("Concurrent proxy server started with " + maxWorkers + " max workers");
+        // Concurrent proxy server started
         
         try {
             acceptConnections();
@@ -63,7 +63,7 @@ public class ConcurrentProxyServer extends ProxyServer {
                     String clientIp = clientSocket.getInetAddress().getHostAddress();
                     int clientPort = clientSocket.getPort();
                     
-                    System.out.println("New connection from " + clientIp + ":" + clientPort);
+                    // New connection accepted
                     
                     // Submit connection handling to thread pool
                     threadPool.submit(() -> handleClientConnectionThreaded(clientSocket, clientIp, clientPort));
@@ -74,7 +74,7 @@ public class ConcurrentProxyServer extends ProxyServer {
                 }
             } catch (IOException e) {
                 if (running) {
-                    System.err.println("Accept error: " + e.getMessage());
+                    // Accept error
                 }
                 break;
             }
@@ -86,14 +86,14 @@ public class ConcurrentProxyServer extends ProxyServer {
      */
     private void handleClientConnectionThreaded(Socket clientSocket, String clientIp, int clientPort) {
         long threadId = Thread.currentThread().getId();
-        System.out.println("[Thread " + threadId + "] Handling connection from " + clientIp + ":" + clientPort);
+        // Thread handling connection
         
         try {
             // Handle persistent connections
             handleClientPersistent(clientSocket, clientIp, clientPort);
             
         } catch (Exception e) {
-            System.err.println("[Thread " + threadId + "] Connection error: " + e.getMessage());
+            // Connection error
         } finally {
             closeSocketSafely(clientSocket);
             
@@ -101,7 +101,7 @@ public class ConcurrentProxyServer extends ProxyServer {
             activeConnections.decrementAndGet();
             completedConnections.incrementAndGet();
             
-            System.out.println("[Thread " + threadId + "] Connection closed for " + clientIp + ":" + clientPort);
+            // Connection closed
         }
     }
     
@@ -120,7 +120,10 @@ public class ConcurrentProxyServer extends ProxyServer {
                     HTTPRequest request = reader.readHttpRequest();
                     String requestLine = request.getMethod() + " " + request.getTarget() + " " + request.getVersion();
                     
-                    System.out.println("Request: " + requestLine);
+                    // Request received
+                    
+                    // Determine cache status BEFORE processing
+                    String cacheStatus = getCacheStatusBeforeProcessing(request);
                     
                     // Process request with timeout
                     byte[] responseData = null;
@@ -166,8 +169,7 @@ public class ConcurrentProxyServer extends ProxyServer {
                         clientOutput.flush();
                     }
                     
-                    // Log transaction with cache status
-                    String cacheStatus = getCacheStatus(request);
+                    // Use cache status determined before processing
                     logger.logTransaction(clientIp, clientPort, cacheStatus, requestLine, statusCode, responseBytes);
                     
                     // Check if connection should be closed
@@ -187,7 +189,7 @@ public class ConcurrentProxyServer extends ProxyServer {
                     break;
                 } catch (java.net.SocketTimeoutException e) {
                     // Socket timeout - normal for persistent connections
-                    System.out.println("[Thread " + Thread.currentThread().getId() + "] Connection timeout - closing");
+                    // Connection timeout
                     break;
                 } catch (IOException e) {
                     // Connection closed by client
@@ -195,13 +197,13 @@ public class ConcurrentProxyServer extends ProxyServer {
                     if (msg != null && !msg.contains("Connection reset") && 
                         !msg.contains("Socket closed") && 
                         !msg.contains("connection was aborted")) {
-                        System.err.println("[Thread " + Thread.currentThread().getId() + "] IO error: " + msg);
+                        // IO error
                     }
                     break;
                 }
             }
         } catch (IOException e) {
-            System.err.println("Error in persistent connection: " + e.getMessage());
+            // Error in persistent connection
         }
     }
     
@@ -367,9 +369,9 @@ public class ConcurrentProxyServer extends ProxyServer {
     }
     
     /**
-     * Get cache status for logging.
+     * Get cache status for logging - check BEFORE processing request.
      */
-    private String getCacheStatus(HTTPRequest request) {
+    private String getCacheStatusBeforeProcessing(HTTPRequest request) {
         if (!"GET".equals(request.getMethod())) {
             return "-"; // Non-GET requests
         }
@@ -422,9 +424,16 @@ public class ConcurrentProxyServer extends ProxyServer {
         return cache.getStats();
     }
     
+    /**
+     * Clear all entries from the cache.
+     */
+    public void clearCache() {
+        cache.clear();
+    }
+    
     @Override
     public void shutdown() {
-        System.out.println("Shutting down concurrent proxy server...");
+        // Shutting down concurrent proxy server
         running = false;
         
         // Close server socket
@@ -440,13 +449,13 @@ public class ConcurrentProxyServer extends ProxyServer {
         if (threadPool != null) {
             int activeCount = activeConnections.get();
             if (activeCount > 0) {
-                System.out.println("Waiting for " + activeCount + " active connections to complete...");
+                // Waiting for active connections to complete
             }
             
             threadPool.shutdown();
             try {
                 if (!threadPool.awaitTermination(30, TimeUnit.SECONDS)) {
-                    System.out.println("Some connections may not have completed - forcing shutdown");
+                    // Forcing shutdown
                     threadPool.shutdownNow();
                 }
             } catch (InterruptedException e) {
@@ -459,11 +468,7 @@ public class ConcurrentProxyServer extends ProxyServer {
         ConnectionStats connStats = getConnectionStats();
         HTTPCache.CacheStats cacheStats = getCacheStats();
         
-        System.out.println("Final Statistics:");
-        System.out.println("  Connections - Total: " + connStats.total + ", Completed: " + connStats.completed);
-        System.out.println("  Cache - Entries: " + cacheStats.entries + ", Hit Rate: " + 
-                         String.format("%.2f%%", cacheStats.hitRate * 100));
-        System.out.println("Concurrent proxy server shutdown complete");
+        // Final statistics and shutdown complete
     }
     
     /**

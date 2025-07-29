@@ -49,10 +49,7 @@ public class ProxyConfig {
             throw new ConfigException("Port must be between 1024 and 65535, got " + port);
         }
         
-        // Recommend using dynamic port range for CSE environment
-        if (port < 49152 || port > 65535) {
-            System.out.println("Warning: Port " + port + " is outside recommended range 49152-65535");
-        }
+        // Port validation removed
     }
     
     private static void validateTimeout(int timeout) throws ConfigException {

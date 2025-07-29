@@ -41,7 +41,7 @@ public class ProxyServer {
         try {
             mainLoop();
         } catch (Exception e) {
-            System.err.println("Server error: " + e.getMessage());
+            // Server error
         } finally {
             cleanup();
         }
@@ -55,7 +55,7 @@ public class ProxyServer {
             serverSocket = new ServerSocket(config.getPort());
             serverSocket.setReuseAddress(true);
             
-            System.out.println("Proxy server listening on port " + config.getPort());
+            // Proxy server listening
             
         } catch (IOException e) {
             throw new IOException("Failed to setup server socket: " + e.getMessage(), e);
@@ -73,22 +73,22 @@ public class ProxyServer {
                     String clientIp = clientSocket.getInetAddress().getHostAddress();
                     int clientPort = clientSocket.getPort();
                     
-                    System.out.println("Accepted connection from " + clientIp + ":" + clientPort);
+                    // Accepted connection
                     
                     // Handle HTTP proxy request
                     handleClientRequest(clientSocket, clientIp, clientPort);
                 }
             } catch (SocketException e) {
                 if (running) {
-                    System.err.println("Socket error: " + e.getMessage());
+                    // Socket error
                 }
                 break;
             } catch (IOException e) {
                 if (running) {
-                    System.err.println("Error accepting connection: " + e.getMessage());
+                    // Error accepting connection
                 }
             } catch (Exception e) {
-                System.err.println("Unexpected error in main loop: " + e.getMessage());
+                // Unexpected error in main loop
                 e.printStackTrace();
             }
         }
@@ -111,7 +111,7 @@ public class ProxyServer {
             HTTPRequest request = reader.readHttpRequest();
             requestLine = request.getMethod() + " " + request.getTarget() + " " + request.getVersion();
             
-            System.out.println("Request: " + requestLine);
+            // Request received
             
             // Handle different HTTP methods
             byte[] responseData;
@@ -145,7 +145,7 @@ public class ProxyServer {
                 statusCode = 400;
                 responseBytes = errorResponse.length;
             } catch (IOException ioE) {
-                System.err.println("Failed to send error response: " + ioE.getMessage());
+                // Failed to send error response
             }
         } catch (ProxyException e) {
             // Proxy specific errors - use ErrorHandler
@@ -155,7 +155,7 @@ public class ProxyServer {
                 clientSocket.getOutputStream().write(errorResponse);
                 responseBytes = errorResponse.length;
             } catch (IOException ioE) {
-                System.err.println("Failed to send error response: " + ioE.getMessage());
+                // Failed to send error response
             }
         } catch (SocketTimeoutException e) {
             // Client timeout
@@ -165,10 +165,10 @@ public class ProxyServer {
                 statusCode = 504;
                 responseBytes = errorResponse.length;
             } catch (IOException ioE) {
-                System.err.println("Failed to send timeout response: " + ioE.getMessage());
+                // Failed to send timeout response
             }
         } catch (Exception e) {
-            System.err.println("Error handling client request: " + e.getMessage());
+            // Error handling client request
             e.printStackTrace();
             try {
                 byte[] errorResponse = ErrorResponseGenerator.badGateway("Internal proxy error");
@@ -176,7 +176,7 @@ public class ProxyServer {
                 statusCode = 502;
                 responseBytes = errorResponse.length;
             } catch (IOException ioE) {
-                System.err.println("Failed to send error response: " + ioE.getMessage());
+                // Failed to send error response
             }
         } finally {
             // Log the transaction
@@ -302,14 +302,14 @@ public class ProxyServer {
      * Shutdown the proxy server.
      */
     public void shutdown() {
-        System.out.println("Shutting down proxy server...");
+        // Shutting down proxy server
         running = false;
         
         if (serverSocket != null && !serverSocket.isClosed()) {
             try {
                 serverSocket.close();
             } catch (IOException e) {
-                System.err.println("Error closing server socket: " + e.getMessage());
+                // Error closing server socket
             }
         }
     }
@@ -319,6 +319,6 @@ public class ProxyServer {
      */
     protected void cleanup() {
         shutdown();
-        System.out.println("Proxy server shutdown complete");
+        // Proxy server shutdown complete
     }
 }

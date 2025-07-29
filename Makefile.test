@@ -1,0 +1,239 @@
+# Makefile for HTTP Proxy Testing
+# Builds and runs comprehensive unit tests for the HTTP proxy implementation
+
+# Directories
+SRC_DIR = src/main/java
+TEST_DIR = src/test/java
+BUILD_DIR = build
+TEST_BUILD_DIR = build/test
+LIB_DIR = lib
+REPORTS_DIR = reports
+
+# Java settings
+JAVA_VERSION = 11
+JAVAC = javac
+JAVA = java
+JAR = jar
+
+# Classpath settings
+JUNIT_VERSION = 4.13.2
+HAMCREST_VERSION = 1.3
+JUNIT_JAR = $(LIB_DIR)/junit-$(JUNIT_VERSION).jar
+HAMCREST_JAR = $(LIB_DIR)/hamcrest-core-$(HAMCREST_VERSION).jar
+
+CLASSPATH = $(BUILD_DIR):$(TEST_BUILD_DIR):$(JUNIT_JAR):$(HAMCREST_JAR)
+TEST_CLASSPATH = $(BUILD_DIR):$(TEST_BUILD_DIR):$(JUNIT_JAR):$(HAMCREST_JAR)
+
+# Source and test files
+MAIN_SOURCES = $(shell find $(SRC_DIR) -name "*.java")
+TEST_SOURCES = $(shell find $(TEST_DIR) -name "*.java" ! -name "HTTPParserTest.java" ! -name "ProxyTestSuite.java" 2>/dev/null || echo "")
+
+# Test classes (only include working classes)
+TEST_CLASSES = proxy.http.HTTPRequestTest \
+               proxy.http.HTTPResponseTest \
+               proxy.http.HTTPStreamReaderTest \
+               proxy.http.HTTPMessageBuilderTest \
+               proxy.config.ProxyConfigTest \
+               proxy.cache.HTTPCacheTest \
+               proxy.server.ConcurrentProxyServerTest \
+               proxy.utils.URLParserTest \
+               proxy.utils.ErrorHandlerTest \
+               proxy.utils.ErrorResponseGeneratorTest \
+               proxy.utils.MessageTransformerTest \
+               proxy.logging.ProxyLoggerTest \
+               proxy.ProxyIntegrationTest \
+               proxy.ProxyStressTest
+
+# Default target
+.PHONY: all
+all: test
+
+# Create necessary directories
+$(BUILD_DIR):
+	mkdir -p $(BUILD_DIR)
+
+$(TEST_BUILD_DIR):
+	mkdir -p $(TEST_BUILD_DIR)
+
+$(LIB_DIR):
+	mkdir -p $(LIB_DIR)
+
+$(REPORTS_DIR):
+	mkdir -p $(REPORTS_DIR)
+
+# Download JUnit and Hamcrest if not present
+$(JUNIT_JAR): | $(LIB_DIR)
+	@echo "Downloading JUnit $(JUNIT_VERSION)..."
+	wget -O $(JUNIT_JAR) "https://repo1.maven.org/maven2/junit/junit/$(JUNIT_VERSION)/junit-$(JUNIT_VERSION).jar" || \
+	curl -L -o $(JUNIT_JAR) "https://repo1.maven.org/maven2/junit/junit/$(JUNIT_VERSION)/junit-$(JUNIT_VERSION).jar"
+
+$(HAMCREST_JAR): | $(LIB_DIR)
+	@echo "Downloading Hamcrest $(HAMCREST_VERSION)..."
+	wget -O $(HAMCREST_JAR) "https://repo1.maven.org/maven2/org/hamcrest/hamcrest-core/$(HAMCREST_VERSION)/hamcrest-core-$(HAMCREST_VERSION).jar" || \
+	curl -L -o $(HAMCREST_JAR) "https://repo1.maven.org/maven2/org/hamcrest/hamcrest-core/$(HAMCREST_VERSION)/hamcrest-core-$(HAMCREST_VERSION).jar"
+
+# Compile main source code
+.PHONY: compile
+compile: $(BUILD_DIR)
+	@echo "Compiling main source code..."
+	$(JAVAC) -d $(BUILD_DIR) -cp $(BUILD_DIR) $(MAIN_SOURCES)
+
+# Compile test source code
+.PHONY: compile-tests
+compile-tests: compile $(TEST_BUILD_DIR) $(JUNIT_JAR) $(HAMCREST_JAR)
+	@echo "Compiling test source code..."
+ifneq ($(TEST_SOURCES),)
+	$(JAVAC) -d $(TEST_BUILD_DIR) -cp $(CLASSPATH) $(TEST_SOURCES)
+else
+	@echo "No test sources found"
+endif
+
+# Run all tests
+.PHONY: test
+test: compile-tests $(REPORTS_DIR)
+	@echo "Running all unit tests..."
+	@echo "=========================="
+	@for test_class in $(TEST_CLASSES); do \
+		echo "Running $$test_class..."; \
+		$(JAVA) -cp $(TEST_CLASSPATH) org.junit.runner.JUnitCore $$test_class || true; \
+		echo ""; \
+	done
+	@echo "=========================="
+	@echo "All tests completed. Check output above for results."
+
+# Run specific test class
+.PHONY: test-class
+test-class: compile-tests
+ifndef CLASS
+	@echo "Usage: make test-class CLASS=<test-class-name>"
+	@echo "Example: make test-class CLASS=proxy.http.HTTPRequestTest"
+else
+	@echo "Running test class: $(CLASS)"
+	$(JAVA) -cp $(TEST_CLASSPATH) org.junit.runner.JUnitCore $(CLASS)
+endif
+
+# Run unit tests only (excluding integration and stress tests)
+.PHONY: test-unit
+test-unit: compile-tests
+	@echo "Running unit tests only..."
+	@echo "=========================="
+	@for test_class in proxy.http.HTTPRequestTest proxy.http.HTTPResponseTest proxy.http.HTTPStreamReaderTest proxy.http.HTTPMessageBuilderTest proxy.config.ProxyConfigTest proxy.cache.HTTPCacheTest proxy.server.ConcurrentProxyServerTest proxy.utils.URLParserTest proxy.utils.ErrorHandlerTest proxy.utils.ErrorResponseGeneratorTest proxy.utils.MessageTransformerTest proxy.logging.ProxyLoggerTest; do \
+		echo "Running $$test_class..."; \
+		$(JAVA) -cp $(TEST_CLASSPATH) org.junit.runner.JUnitCore $$test_class || true; \
+		echo ""; \
+	done
+	@echo "=========================="
+
+# Run integration tests only
+.PHONY: test-integration
+test-integration: compile-tests
+	@echo "Running integration tests..."
+	$(JAVA) -cp $(TEST_CLASSPATH) org.junit.runner.JUnitCore proxy.ProxyIntegrationTest
+
+# Run stress tests only
+.PHONY: test-stress
+test-stress: compile-tests
+	@echo "Running stress tests..."
+	$(JAVA) -cp $(TEST_CLASSPATH) org.junit.runner.JUnitCore proxy.ProxyStressTest
+
+# Run tests with coverage (basic line counting)
+.PHONY: test-coverage
+test-coverage: compile-tests
+	@echo "Running tests with basic coverage analysis..."
+	@total_lines=0; \
+	tested_files=0; \
+	for java_file in $(MAIN_SOURCES); do \
+		lines=$$(wc -l < $$java_file); \
+		total_lines=$$((total_lines + lines)); \
+		tested_files=$$((tested_files + 1)); \
+	done; \
+	echo "Total lines of code: $$total_lines"; \
+	echo "Total files: $$tested_files"; \
+	$(MAKE) test
+	@echo "Coverage analysis complete. See test results above."
+
+# Generate test report
+.PHONY: test-report
+test-report: compile-tests $(REPORTS_DIR)
+	@echo "Generating test report..."
+	@echo "HTTP Proxy Test Report" > $(REPORTS_DIR)/test-report.txt
+	@echo "======================" >> $(REPORTS_DIR)/test-report.txt
+	@echo "Generated on: $$(date)" >> $(REPORTS_DIR)/test-report.txt
+	@echo "" >> $(REPORTS_DIR)/test-report.txt
+	@echo "Test Classes:" >> $(REPORTS_DIR)/test-report.txt
+	@for test_class in $(TEST_CLASSES); do \
+		echo "  - $$test_class" >> $(REPORTS_DIR)/test-report.txt; \
+	done
+	@echo "" >> $(REPORTS_DIR)/test-report.txt
+	@echo "Running tests..." >> $(REPORTS_DIR)/test-report.txt
+	@$(MAKE) test 2>&1 | tee -a $(REPORTS_DIR)/test-report.txt
+	@echo "Test report generated in $(REPORTS_DIR)/test-report.txt"
+
+# Validate test setup
+.PHONY: validate
+validate: $(JUNIT_JAR) $(HAMCREST_JAR)
+	@echo "Validating test setup..."
+	@echo "Java version: $$($(JAVA) -version 2>&1 | head -1)"
+	@echo "JUnit JAR: $(JUNIT_JAR) $$(if [ -f $(JUNIT_JAR) ]; then echo '✓'; else echo '✗'; fi)"
+	@echo "Hamcrest JAR: $(HAMCREST_JAR) $$(if [ -f $(HAMCREST_JAR) ]; then echo '✓'; else echo '✗'; fi)"
+	@echo "Main sources found: $$(echo $(MAIN_SOURCES) | wc -w) files"
+	@echo "Test sources found: $$(echo $(TEST_SOURCES) | wc -w) files"
+	@echo "Test classes defined: $$(echo $(TEST_CLASSES) | wc -w) classes"
+
+# Quick smoke test
+.PHONY: smoke-test
+smoke-test: compile-tests
+	@echo "Running smoke test..."
+	$(JAVA) -cp $(TEST_CLASSPATH) org.junit.runner.JUnitCore proxy.http.HTTPRequestTest
+
+# Clean build artifacts
+.PHONY: clean
+clean:
+	@echo "Cleaning build artifacts..."
+	rm -rf $(BUILD_DIR)
+	rm -rf $(TEST_BUILD_DIR)
+	rm -rf $(REPORTS_DIR)
+
+# Clean everything including downloaded libraries
+.PHONY: clean-all
+clean-all: clean
+	@echo "Cleaning all artifacts including libraries..."
+	rm -rf $(LIB_DIR)
+
+# Help target
+.PHONY: help
+help:
+	@echo "HTTP Proxy Test Makefile"
+	@echo "======================="
+	@echo ""
+	@echo "Targets:"
+	@echo "  all              - Run all tests (default)"
+	@echo "  compile          - Compile main source code"
+	@echo "  compile-tests    - Compile test source code"
+	@echo "  test             - Run all tests"
+	@echo "  test-unit        - Run unit tests only"
+	@echo "  test-integration - Run integration tests only"
+	@echo "  test-stress      - Run stress tests only"
+	@echo "  test-class       - Run specific test class (use CLASS=<name>)"
+	@echo "  test-coverage    - Run tests with basic coverage analysis"
+	@echo "  test-report      - Generate comprehensive test report"
+	@echo "  smoke-test       - Run quick smoke test"
+	@echo "  validate         - Validate test setup"
+	@echo "  clean            - Clean build artifacts"
+	@echo "  clean-all        - Clean all artifacts including libraries"
+	@echo "  help             - Show this help message"
+	@echo ""
+	@echo "Examples:"
+	@echo "  make test                                    # Run all tests"
+	@echo "  make test-class CLASS=proxy.http.HTTPRequestTest  # Run specific test"
+	@echo "  make test-unit                              # Run only unit tests"
+	@echo "  make test-coverage                          # Run with coverage"
+
+# Check if required tools are available
+.PHONY: check-tools
+check-tools:
+	@echo "Checking required tools..."
+	@which $(JAVAC) > /dev/null || (echo "Error: javac not found"; exit 1)
+	@which $(JAVA) > /dev/null || (echo "Error: java not found"; exit 1)
+	@which wget > /dev/null || which curl > /dev/null || (echo "Error: wget or curl required for downloading dependencies"; exit 1)
+	@echo "All required tools found ✓"

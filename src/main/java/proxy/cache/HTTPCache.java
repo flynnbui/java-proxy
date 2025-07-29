@@ -36,11 +36,24 @@ public class HTTPCache {
      */
     public String normalizeUrl(String url) {
         try {
+            // Check if URL looks valid first
+            if (!url.contains("://")) {
+                return url;
+            }
+            
             URI uri = new URI(url);
             
-            // Normalize components
-            String scheme = uri.getScheme() != null ? uri.getScheme().toLowerCase() : "http";
-            String hostname = uri.getHost() != null ? uri.getHost().toLowerCase() : "";
+            // Normalize components  
+            String scheme = uri.getScheme();
+            String hostname = uri.getHost();
+            
+            // If either is null after URI parsing, it's malformed
+            if (scheme == null || hostname == null) {
+                return url;
+            }
+            
+            scheme = scheme.toLowerCase();
+            hostname = hostname.toLowerCase();
             
             // Handle default ports
             int port = uri.getPort();
@@ -170,7 +183,7 @@ public class HTTPCache {
             cache.remove(lruKey);
             currentSize -= lruItem.size;
             
-            System.out.println("Cache evicted: " + lruKey + " (" + lruItem.size + " bytes)");
+            // Cache evicted
         }
     }
     

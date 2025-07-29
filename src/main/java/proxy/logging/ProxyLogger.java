@@ -34,8 +34,8 @@ public class ProxyLogger {
         
         synchronized (lock) {
             // Format timestamp as specified: [dd/MMM/yyyy:HH:mm:ss Z]
-            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("[dd/MMM/yyyy:HH:mm:ss Z]", Locale.ENGLISH);
-            String timestamp = ZonedDateTime.now().format(formatter);
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MMM/yyyy:HH:mm:ss Z", Locale.ENGLISH);
+            String timestamp = "[" + ZonedDateTime.now().format(formatter) + "]";
             
             // Build log entry
             String logEntry = String.format("%s %d %s %s \"%s\" %d %d",
@@ -65,27 +65,16 @@ public class ProxyLogger {
     }
     
     /**
-     * Log warning message.
+     * Log warning message (disabled for clean transaction logs).
      */
     public void logWarning(String message) {
-        synchronized (lock) {
-            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("[dd/MMM/yyyy:HH:mm:ss Z]", Locale.ENGLISH);
-            String timestamp = ZonedDateTime.now().format(formatter);
-            System.err.println("[WARN] " + timestamp + " " + message);
-        }
+        // Warning logging disabled - only transaction logs allowed
     }
     
     /**
-     * Log error message with optional exception.
+     * Log error message (disabled for clean transaction logs).
      */
     public void logError(String message, Throwable error) {
-        synchronized (lock) {
-            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("[dd/MMM/yyyy:HH:mm:ss Z]", Locale.ENGLISH);
-            String timestamp = ZonedDateTime.now().format(formatter);
-            System.err.println("[ERROR] " + timestamp + " " + message);
-            if (error != null) {
-                error.printStackTrace(System.err);
-            }
-        }
+        // Error logging disabled - only transaction logs allowed
     }
 }
